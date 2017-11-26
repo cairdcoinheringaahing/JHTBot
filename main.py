@@ -1,36 +1,54 @@
 # -*- coding: utf-8 -*-
-## V 3.0
-"""
-ChangeLog
-- V3.0 -
-Rewrote main.py to work with the new chatbot.py
-Cleaned the code
-
-
-
-"""
-## Description
-"""
-A chatbot used for JHT
-"""
 
 # Imports and initialization
-from chatbot import Chatbot, log # chatbot.py, the chatbot framework
-import random # chose a random element from a table
-import shutil # file manipulation (creating images from bytes)
-from PIL import Image # check if images are valid / images format conversion
-from imgurpython import ImgurClient # upload images to imgur
-import time # sleeping
+from chatbot import Chatbot, log
 
-client_id = 'fb1b922cb86bb0f'  # Imgur module setup
-client_secret = 'cffaf5da440289a8923f9be60c22b26e25675d3d'
-clientImg = ImgurClient(client_id, client_secret)
+import re
+import requests
+import time
 
-## Initialization
-# Create chatbot
-chatbot=Chatbot()
-# Login to SE
+URL = 'https://github.com/DennisMitchell/jelly/wiki/'
+ATOM = re.compile(r'''<tr>\n<td><code>(?:.{1,2}|.&[^;]*;)</code></td>\n<td>(?:(?!</td>).*)</td>\n</tr>''')
+QUICK = re.compile(r'''<tr>\n<td><code>(?:.{1,2}|.&[^;]*;)</code></td>\n<td>(?:(?!</td>).*)</td>\n<td>(?:(?!</td>).*)</td>\n</tr>''')
+LOOKUP = {}
+chatbot = Chatbot()
+
 chatbot.login()
+
+def HTMLtoMD(string):
+    replace = {'strong': '**', 'code': '`', 'td': ''}
+    chresc = {'lt':'<', 'gt':'>', 'amp':'&'}
+    for html in replace:
+        string = re.sub(r'</?{}>'.format(html), replace[html], string)
+    for charesc in chresc:
+        string = string.replace('&'+charesc+';', chresc[charesc])
+    return re.sub('<a href="([^"]+)">((?!</td>).*)</a>', r'[\2](\1)', string)
+
+def removeHTML(string, mode):
+    if mode == 1:
+        start = 10; end = -12
+    if mode == 2:
+        start = 4; end = -5
+    return HTMLtoMD(string[start:end])
+
+def initDescriptions(url, page):
+    if page in ['Quicks', 'Syntax']: REGEX = QUICK
+    else: REGEX = ATOM
+    
+    f = str(requests.get(url).text).strip()
+    start = f.find('<tbody>')
+    end = f.rfind('</tbody>')
+    table = ''.join(f[start:end].split('</table>'))
+    matches = list(map(lambda a: a.split('\n'), REGEX.findall(table)))
+    
+    for match in matches:
+        if len(match) == 5:
+            match = match[0], match[1], match[2]+' '+match[3], match[4]
+        _, atom, des, _ = match
+        LOOKUP[removeHTML(atom, 1)] = removeHTML(des, 2)
+    
+for page in ['Atoms', 'Quicks', 'Syntax']:
+    initDescriptions(URL + page, page)
 
 def handleEvents(room, event):
 	if event['user_id']==chatbot.bot_chat_id: return # don't consider events from the bot*
@@ -44,12 +62,13 @@ def handleEvents(room, event):
 		pass
 	
 def retrieve_description(command):
-	pass
+	try: return command + ': ' + LOOKUP[command]
+	except: return 'No such command: {}'.format(command)
 
 commands={} #format :: {init : {cmd_msg : [func, sep]}, ...}
 def addCommand(func, cmd_msg, init='@JHTBot ', sep=' '):
 	# adds commands following the following pattern
-	# func(a,b,c) for message "!!cmd_msg/a/b/c"
+	# func(a,b,c) for message "@JHTBot a b c
 	if not init in commands:
 		commands[init]={}
 	commands[init][cmd_msg]=[func, sep]
@@ -85,8 +104,6 @@ def handleMessage(room, event):
 					except Exception as e:
 						log("An error occured while launcing function {} with args {} : {}".format(cmd_msg, args, e))
 				
-			
-
 chatbot.join_room(57815, handleEvents) # JHT
 chatbot.join_room(1, handleEvents) # Sandbox
 
