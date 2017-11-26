@@ -228,24 +228,24 @@ class Chatbot():
 		fkey=getField("fkey", "https://openid.stackexchange.com/account/login")
 		payload = {"email": email, "password": password, "isSignup":"false", "isLogin":"true","isPassword":"false","isAddLogin":"false","hasCaptcha":"false","ssrc":"head","submitButton":"Log in",
 			   "fkey": fkey}
-		r = self.sendRequest("https://chemistry.stackexchange.com/users/login-or-signup/validation/track","post",payload).text
+		r = self.sendRequest("https://codegolf.stackexchange.com/users/login-or-signup/validation/track","post",payload).text
 		if r.find("Login-OK")<0:
-			Log("Logging to Chem-SE - FAILURE - aborting")
+			Log("Failure to log in to PPCG")
 			abort()
-		log("Logging to Chem-SE - OK")
+		log("Logging to PPCG - OK")
 		
 		payload = {"email": email, "password": password, "ssrc":"head", "fkey": fkey}
-		r = self.sendRequest("https://chemistry.stackexchange.com/users/login?ssrc=head&returnurl=https%3a%2f%2fchemistry.stackexchange.com%2f","post",payload).text
-		if r.find('<a href="https://chemistry.stackexchange.com/users/logout"')<0:
-			error("Loading Chem-SE profile - FAILURE -  aborting")
+		r = self.sendRequest("https://codegolf.stackexchange.com/users/login?ssrc=head&returnurl=https%3a%2f%2fcodegolf.stackexchange.com%2f","post",payload).text
+		if r.find('<a href="https://codegolf.stackexchange.com/users/logout"')<0:
+			error("Loading PPCG profile - FAILURE -  aborting")
 			abort()
-		log("Loading Chem-SE profile - OK")
+		log("Loading PPCG profile - OK")
 		
 		# Logs in to all other SE sites
-		self.sendRequest("https://chemistry.stackexchange.com/users/login/universal/request","post")
+		self.sendRequest("https://codegolf.stackexchange.com/users/login/universal/request","post")
 		
 		# get chat key
-		r = self.sendRequest("http://chat.chemistry.stackexchange.com/chats/join/favorite", "get").text
+		r = self.sendRequest("http://chat.stackexchange.com/chats/join/favorite", "get").text
 		p=r.find('<a href="/users/')+len('<a href="/users/')
 		self.bot_chat_id=int(r[p:r.find('/',p)])
 		fkey=getField("fkey", r=r) # /!\ changes from previous one
@@ -261,55 +261,3 @@ class Chatbot():
 	def leaveAllRooms(self):
 		for room in self.rooms_joined:
 			room.leave()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
