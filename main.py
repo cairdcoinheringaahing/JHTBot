@@ -6,49 +6,60 @@ from chatbot import Chatbot, log
 import re
 import requests
 import time
+import json
 
 URL = 'https://github.com/DennisMitchell/jelly/wiki/'
 ATOM = re.compile(r'''<tr>\n<td><code>(?:.{1,2}|.&[^;]*;)</code></td>\n<td>(?:(?!</td>).*)</td>\n</tr>''')
 QUICK = re.compile(r'''<tr>\n<td><code>(?:.{1,2}|.&[^;]*;)</code></td>\n<td>(?:(?!</td>).*)</td>\n<td>(?:(?!</td>).*)</td>\n</tr>''')
 LOOKUP = {}
+NAMES = {}
 chatbot = Chatbot()
+
+n_dict = json.load(open('names.json', encoding='utf-8'))
+for key in n_dict:
+    value = n_dict[key]
+    if type(value) == list:
+        for v_key in value:
+            NAMES[v_key] = key
+    else:
+        NAMES[value] = key
 
 chatbot.login()
 
 def HTMLtoMD(string):
-    replace = {'strong': '**', 'code': '`', 'td': ''}
-    chresc = {'lt':'<', 'gt':'>', 'amp':'&'}
-    for html in replace:
-        string = re.sub(r'</?{}>'.format(html), replace[html], string)
-    for charesc in chresc:
-        string = string.replace('&'+charesc+';', chresc[charesc])
-    return re.sub('<a href="([^"]+)">((?!</td>).*)</a>', r'[\2](\1)', string)
+	replace = {'strong': '**', 'code': '`', 'td': ''}
+	chresc = {'lt':'<', 'gt':'>', 'amp':'&'}
+	for html in replace:
+		string = re.sub(r'</?{}>'.format(html), replace[html], string)
+	for charesc in chresc:
+		string = string.replace('&'+charesc+';', chresc[charesc])
+	return re.sub('<a href="([^"]+)">((?!</td>).*)</a>', r'[\2](\1)', string)
 
 def removeHTML(string, mode):
-    if mode == 1:
-        start = 10; end = -12
-    if mode == 2:
-        start = 4; end = -5
-    return HTMLtoMD(string[start:end])
+	if mode == 1:
+		start = 10; end = -12
+	if mode == 2:
+		start = 4; end = -5
+	return HTMLtoMD(string[start:end])
 
 def initDescriptions(url, page):
-    if page in ['Quicks', 'Syntax']: REGEX = QUICK
-    else: REGEX = ATOM
-    
-    f = str(requests.get(url).text).strip()
-    start = f.find('<tbody>')
-    end = f.rfind('</tbody>')
-    table = ''.join(f[start:end].split('</table>'))
-    matches = list(map(lambda a: a.split('\n'), REGEX.findall(table)))
-    
-    for match in matches:
-        if len(match) == 5:
-            match = match[0], match[1], match[2]+' '+match[3], match[4]
-        _, atom, des, _ = match
-        LOOKUP[removeHTML(atom, 1)] = removeHTML(des, 2)
-    
+	if page in ['Quicks', 'Syntax']: REGEX = QUICK
+	else: REGEX = ATOM
+	
+	f = str(requests.get(url).text).strip()
+	start = f.find('<tbody>')
+	end = f.rfind('</tbody>')
+	table = ''.join(f[start:end].split('</table>'))
+	matches = list(map(lambda a: a.split('\n'), REGEX.findall(table)))
+	
+	for match in matches:
+		if len(match) == 5:
+			match = match[0], match[1], match[2]+' '+match[3], match[4]
+		_, atom, des, _ = match
+		LOOKUP[removeHTML(atom, 1)] = removeHTML(des, 2)
+	
 for page in ['Atoms', 'Quicks', 'Syntax']:
-    initDescriptions(URL + page, page)
+	initDescriptions(URL + page, page)
 
 def handleEvents(room, event):
 	if event['user_id']==chatbot.bot_chat_id: return # don't consider events from the bot*
@@ -74,11 +85,22 @@ def addCommand(func, cmd_msg, init='@JHTBot ', sep=' '):
 	commands[init][cmd_msg]=[func, sep]
 
 def initCommands():
-	def decribe(room, event, char):
+	def describe(room, user, event, char):
 		des = retrieve_description(char)
-		room.sendMessage(des)
+		log('@' + user + ' ' + des)
+		room.sendMessage('@' + user + ' ' + des)
+
+	def find(room, user, event, *args):
+		args = ' '.join(args).capitalize()
+		try: msg = ' Found `{}` for description: {}'.format(NAMES[args], args)
+		except: msg = ' Unknown description: {}'.format(args)
+		log('@' + user + msg)
+		room.sendMessage('@' + user + msg)
 	
 	addCommand(describe, 'Describe')
+	addCommand(describe, 'describe')
+	addCommand(find, 'Find')
+	addCommand(find, 'find')
 	
 initCommands()
 	
@@ -99,54 +121,11 @@ def handleMessage(room, event):
 					content_=content_[len(cmd_msg)+len(sep):]
 					args=content_.split(sep)
 					if args==['']: args=[]
-					try:
-						func(room, event, *args)
-					except Exception as e:
-						log("An error occured while launcing function {} with args {} : {}".format(cmd_msg, args, e))
+					# This try has been commented so that the full err message can be seen
+					#try:
+					sent = func(room, user_name.replace(' ',''), event, *args)
+					#except Exception as e:
+						#log("An error occured while launcing function {} with args {} : {}".format(cmd_msg, args, e))
 				
 chatbot.join_room(57815, handleEvents) # JHT
 chatbot.join_room(1, handleEvents) # Sandbox
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
