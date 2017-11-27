@@ -15,7 +15,7 @@ A framework to set up a chat bot on StackExchange's chat rooms
 
 # Imports and initialization
 import requests # making POST/GET requests
-import ujson as json # fast JSON library
+import json # fast JSON library
 import time # timestamping events + measuring intervals between events / pausing the program / getting time since epoch for starting timestamps
 import os # get local path, create folders
 import Cryptodome.Cipher.DES # encrypt and decrypt credidentials
@@ -30,7 +30,7 @@ def log(msg, name="logs/log.txt",verbose=True): # Logging messages and errors | 
 	with open(name, "ab") as f:
 		timeStr = str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
 		f.write('{} {}\n'.format(timeStr,msg).encode('utf-8'))
-		if verbose: print('<Log> {}'.format(msg))
+		if verbose: print('<Log> {}'.format(msg.encode('utf-8')))
 
 def logFile(r,name="logs/logFile.html"):  # logs the string in the file <name>. Will overwrite previous data.
 	with open(name, "wb") as f:
@@ -161,6 +161,7 @@ class Room():
 		if r.text.find("The message is too long") >= 0:
 			log("Message too long : " + msg)
 			return False
+		logFile(r.text,'tempLog.txt')
 		r = r.json()
 		return r["id"]
 	
@@ -197,6 +198,7 @@ class Chatbot():
 					log("Error while sending requets -  Invalid request type :" + str(typeR))
 				successful = True
 			except Exception as e:
+				log(str(r) + str(e))
 				time.sleep(1)
 				if tries > 4:
 					if type(r) != type(""):  # string or request object ?
