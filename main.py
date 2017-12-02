@@ -148,42 +148,6 @@ def initCommands():
                 forms = [reply, '`'+'`'*('`' in repl), repl, '`'+'`'*('`' in repl)]
                 room.sendMessage(find.format(*forms))
 
-        def help_msg(room, reply, user, event, *args):
-                if len(args) == 1:
-                        about = args[0].lower()
-                else:
-                        about = 'all'
-                cmds = list(sorted(commands['@JHTBot '].keys()))
-                cmds.remove('codepage')
-                cmds.remove('code page')
-                cmds.append('replace codes')
-                if about == 'all':
-                        msg = '''Hello! I am JHTBot, a chatbot used as a learning resource in [Jelly Hypertraining](https://chat.stackexchange.com/rooms/57815/jelly-hypertraining)\nTo find information about each command, send `@JHTBot help:<command>`\nThe current available commands are:\n{}'''.format(', '.join(cmds))
-                if about == 'addinput':
-                        msg = '''Usage: `@JHTBot addinput <string>`\nAdds `<string>` to the current list of inputs'''
-                if about == 'clearinput':
-                        msg = '''Usage: `@JHTBot clearinput`\nClears the list of inputs'''
-                if about.replace('_', '').replace(' ', '') == 'codepage':
-                        msg = '''Usage: `@JHTBot Code page`\nReturns the complete Jelly code page in lexographical order'''
-                if about == 'construct':
-                        msg = '''Usage: `@JHTBot Replace <code> <code> (...) <code>`\nGenerates a single string sent as a single message constructed from the codes given'''
-                if about == 'describe':
-                        msg = '''Usage: `@JHTBot Describe <atom/quick/syntax>`\nUsed to describe the given command. Returns the official description from the wiki page'''
-                if about == 'find':
-                        msg = '''Usage: `@JHTBot Find <name>`\nLooks for an atom, quick or syntax with the official name given.'''
-                if about == 'help':
-                        msg = '''Hello! I am JHTBot, a chatbot used as a learning resource in [Jelly Hypertraining](https://chat.stackexchange.com/rooms/57815/jelly-hypertraining)\nTo find information about each command, send `@JHTBot help:<command>`\nThe current available commands are:\n{}'''.format(', '.join(cmds))
-                if about == 'replace':
-                        msg = '''Usage: `@JHTBot Replace <code>`\nUsed to generate a specific symbol, dependant on the code given.'''
-                if about == 'replace codes':
-                        msg = '''Replacement codes for the `Replace` command\nCheck [this gist](https://gist.github.com/cairdcoinheringaahing/b24ab7802c5979ab9ce398fedb811795) for a complete table'''
-                if about == 'run':
-                        msg == '''Usage: `@JHTBot Run <code> [<arg1>, ... <argn>]`\nRuns the given code, and repliues with the correct output'''
-
-                room.sendMessage(((':{} '.format(reply))*(about != 'all')) + msg.split('\n')[0])
-                for message in msg.split('\n')[1:]:
-                        room.sendMessage(message)
-
         def run_tio(room, reply, user, event, *args):
                 if len(args) > 1: code, *args = args
                 else: code = args[0]; args = '[]'
@@ -217,7 +181,6 @@ def initCommands():
         addCommand(code_page, 'code_page')
         addCommand(from_ascii, 'replace')
         addCommand(join_ascii, 'construct')
-        addCommand(help_msg, 'help', sep=':')
         addCommand(run_tio, 'run')
         addCommand(add_input, 'addinput')
         addCommand(clear_input, 'clearinput')
@@ -225,6 +188,43 @@ def initCommands():
         return unknown
         
 unknown = initCommands()
+
+def help_msg(room, reply, user, event, *args):
+        if len(args) == 1:
+                about = args[0].lower()
+        else:
+                about = 'all'
+        cmds = list(sorted(commands['@JHTBot '].keys()))
+        cmds.remove('codepage')
+        cmds.remove('code page')
+        cmds.append('replace codes')
+        msg = 'Unknown help request: {}'.format(about)
+        if about == 'all':
+                msg = '''Hello! I am JHTBot, a chatbot used as a learning resource in [Jelly Hypertraining](https://chat.stackexchange.com/rooms/57815/jelly-hypertraining)\nTo find information about each command, send `@JHTBot help:<command>`\nThe current available commands are:\n{}'''.format(', '.join(cmds))
+        if about == 'addinput':
+                msg = '''Usage: `@JHTBot addinput <string>`\nAdds `<string>` to the current list of inputs'''
+        if about == 'clearinput':
+                msg = '''Usage: `@JHTBot clearinput`\nClears the list of inputs'''
+        if about.replace('_', '').replace(' ', '') == 'codepage':
+                msg = '''Usage: `@JHTBot Code page`\nReturns the complete Jelly code page in lexographical order'''
+        if about == 'construct':
+                msg = '''Usage: `@JHTBot Replace <code> <code> (...) <code>`\nGenerates a single string sent as a single message constructed from the codes given'''
+        if about == 'describe':
+                msg = '''Usage: `@JHTBot Describe <atom/quick/syntax>`\nUsed to describe the given command. Returns the official description from the wiki page'''
+        if about == 'find':
+                msg = '''Usage: `@JHTBot Find <name>`\nLooks for an atom, quick or syntax with the official name given.'''
+        if about == 'help':
+                msg = '''Hello! I am JHTBot, a chatbot used as a learning resource in [Jelly Hypertraining](https://chat.stackexchange.com/rooms/57815/jelly-hypertraining)\nTo find information about each command, send `@JHTBot help:<command>`\nThe current available commands are:\n{}'''.format(', '.join(cmds))
+        if about == 'replace':
+                msg = '''Usage: `@JHTBot Replace <code>`\nUsed to generate a specific symbol, dependant on the code given.'''
+        if about == 'replace codes':
+                msg = '''Replacement codes for the `Replace` command\nCheck [this gist](https://gist.github.com/cairdcoinheringaahing/b24ab7802c5979ab9ce398fedb811795) for a complete table'''
+        if about == 'run':
+                msg = '''Usage: `@JHTBot Run <code> [<arg1>, ... <argn>]`\nRuns the given code, and replies with the correct output'''
+
+        room.sendMessage(((':{} '.format(reply))*(about != 'all')) + msg.split('\n')[0])
+        for message in msg.split('\n')[1:]:
+                room.sendMessage(message)
         
 def handleMessage(room, event):
         content = event['content']
@@ -236,6 +236,11 @@ def handleMessage(room, event):
         log('[{} - {}] Got message "{}" from user {}'.format(chat_room_name, chat_room_id, content, user_name, user_id))
         username = user_name.replace(' ', '')
         found = True
+
+        if content.startswith('@JHTBot help:'):
+                content = content[13:]
+                help_msg(room, msg_id, username, event, content)
+                return False
         
         for init in commands:
                 if content.find(init) == 0:
