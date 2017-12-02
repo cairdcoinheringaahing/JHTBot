@@ -152,17 +152,19 @@ class Room():
 			for event in activity['e']:
 				self.handleEvents(self, event)
 				
-	def sendMessage(self, msg):
+	def sendMessage(self, msg, wait=False):
+		if not wait: log(msg)
 		payload = {"fkey": self.chatbot.fkey, "text": msg}
-		r = self.chatbot.sendRequest("http://chat.stackexchange.com/chats/{}/messages/new".format(self.id), "post", payload)
+		headers={'Referer': 'https://chat.stackexchange.com/rooms/{}/sandbox'.format(self.id),'Origin': 'https://chat.stackexchange.com'}
+		r = self.chatbot.sendRequest("http://chat.stackexchange.com/chats/{}/messages/new".format(self.id), "post", payload, headers=headers)
 		if r.text.find("You can perform this action again") >= 0: # sending messages too fast
 			time.sleep(3)
-			return self.sendMessage(msg)
+			return self.sendMessage(msg, True)
 		if r.text.find("The message is too long") >= 0:
-			log("Message too long : " + msg)
+			log("Message too long : {}".format(msg))
 			return False
-		logFile(r.text,'tempLog.txt')
 		r = r.json()
+		# log(r)
 		return r["id"]
 	
 	def editMessage(self, msg, msg_id): # edit message with id <msg_id> to have the new content <msg>
@@ -181,10 +183,11 @@ class Chatbot():
 		self.fkey=None # key used by SE to authentify users, needed to talk in the chat
 		self.bot_chat_id=None
 		self.rooms_joined=[]
+		self.host=None
 		
 		# propagate vars
 		self.verbose=verbose
-		
+	
 	def sendRequest(self, url, typeR="get", payload={}, headers={},verify=True): # sends a POST/GET request to <url> with arguments <payload>, headers <headers>. Will check SSL if <verify>.
 		r = ""
 		successful, tries = False, 0
@@ -193,24 +196,24 @@ class Chatbot():
 				if typeR == "get":
 					r = self.session.get(url, data=payload, headers=headers, verify=verify)
 				elif typeR == "post":
-					r = self.session.post(url, data=payload, headers=headers, verify=verify)
+					r = self.session.post(url, data=payload, headers=headers, verify=verify, cookies=requests.utils.dict_from_cookiejar(self.session.cookies)) # ugly patch
 				else:
-					log("Error while sending requets -  Invalid request type :" + str(typeR))
+					log("Error while sending requets -  Invalid request type :{}".format(typeR))
 				successful = True
 			except Exception as e:
-				log(str(r) + str(e))
 				time.sleep(1)
-				if tries > 4:
+				if tries >= 4:
 					if type(r) != type(""):  # string or request object ?
 						r = r.text
-					log("Error while sending requets - The request failed : " + str(e), r)
+					log("Error while sending request - The request failed : {}".format(e))
+					return False
 				tries += 1
 		return r
 	
 	def log(self, msg, name="logs/log.txt"): # Logging messages and errors | Appends <msg> to the log <name>, prints if self.verbose
 		log(msg,name,verbose=self.verbose)
 		
-	def login(self): # Login to SE
+	def login(self, host="codegolf.stackexchange.com"): # Login to SE
 		def getField(field, url="", r=""):
 			"""gets the hidden field <field> from string <r> ELSE url <url>"""
 			if r == "":
@@ -230,32 +233,32 @@ class Chatbot():
 		fkey=getField("fkey", "https://openid.stackexchange.com/account/login")
 		payload = {"email": email, "password": password, "isSignup":"false", "isLogin":"true","isPassword":"false","isAddLogin":"false","hasCaptcha":"false","ssrc":"head","submitButton":"Log in",
 			   "fkey": fkey}
-		r = self.sendRequest("https://codegolf.stackexchange.com/users/login-or-signup/validation/track","post",payload).text
+		r = self.sendRequest("https://{}/users/login-or-signup/validation/track".format(host),"post",payload).text
 		if r.find("Login-OK")<0:
-			Log("Failure to log in to PPCG")
+			log("Logging to SE - FAILURE - aborting")
 			abort()
-		log("Logging to PPCG - OK")
+		log("Logging to SE - OK")
 		
 		payload = {"email": email, "password": password, "ssrc":"head", "fkey": fkey}
-		r = self.sendRequest("https://codegolf.stackexchange.com/users/login?ssrc=head&returnurl=https%3a%2f%2fcodegolf.stackexchange.com%2f","post",payload).text
-		if r.find('<a href="https://codegolf.stackexchange.com/users/logout"')<0:
-			error("Loading PPCG profile - FAILURE -  aborting")
+		r = self.sendRequest("https://{}/users/login?ssrc=head&returnurl=https%3a%2f%2f{}%2f".format(host, host),"post",payload).text
+		if r.find('<a href="https://{}/users/logout"'.format(host))<0:
+			error("Loading SE profile - FAILURE -  aborting")
 			abort()
-		log("Loading PPCG profile - OK")
+		log("Loading SE profile - OK")
 		
 		# Logs in to all other SE sites
-		self.sendRequest("https://codegolf.stackexchange.com/users/login/universal/request","post")
+		self.sendRequest("https://{}/users/login/universal/request".format(host),"post")
 		
 		# get chat key
-		r = self.sendRequest("http://chat.stackexchange.com/chats/join/favorite", "get").text
+		r = self.sendRequest("http://chat.{}/chats/join/favorite".format(host), "get").text
 		p=r.find('<a href="/users/')+len('<a href="/users/')
 		self.bot_chat_id=int(r[p:r.find('/',p)])
 		fkey=getField("fkey", r=r) # /!\ changes from previous one
 		self.fkey=fkey
 		log("Got chat fkey : {}".format(fkey))
 		log("Login to the SE chat successful")
-
-	def join_room(self,room_id,handleEvents): # Join a chatroom
+	
+	def joinRoom(self,room_id,handleEvents): # Join a chatroom
 		r=Room(room_id, self, handleEvents)
 		self.rooms_joined.append(r)
 		return r
