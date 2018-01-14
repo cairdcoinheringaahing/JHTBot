@@ -37,7 +37,7 @@ for key in n_dict:
         else:
                 NAMES[value] = key
 
-# chatbot.login()
+chatbot.login()
 
 def strip_tags(html, to_md=True):
 	if to_md: repl = {'code': '`', 'td': '', 'strong': '**', 'sup': '', 'strike': '---', 'b': '**', 'i': '*'}
