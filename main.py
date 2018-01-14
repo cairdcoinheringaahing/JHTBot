@@ -3,8 +3,9 @@
 # Imports and initialization
 from chatbot import Chatbot, log
 import ascii_jelly
-import tio
+import webstuff
 
+import html as HTML
 import json
 import re
 import requests
@@ -23,6 +24,7 @@ User time: \d{1,2}\.\d{3} s ?
 Sys\. time: \d{1,2}\.\d{3} s ?
 CPU share: \d{2}\.\d{2} % ?
 Exit code: )([01])''')
+todolist = 'todo.txt'
 
 chatbot = Chatbot()
 
@@ -35,39 +37,26 @@ for key in n_dict:
         else:
                 NAMES[value] = key
 
-chatbot.login()
+# chatbot.login()
 
-def HTMLtoMD(string, no_conv=False):
-        string = from_md(string)
-        replace = {'strong': '**', 'code': '`', 'td': '', 'i':'*', 'b':'**'}
-        if no_conv: replace = {'strong': '', 'code': '', 'td': '', 'i':'', 'b':''}
-        chresc = {'lt':'<', 'gt':'>', 'amp':'&', 'quot': '"'}
-        for html in replace:
-                string = re.sub(r'</?{}>'.format(html), replace[html], string)
-        for charesc in chresc:
-                string = string.replace('&'+charesc+';', chresc[charesc])
-        return re.sub("<a href='([^']+)'>((?!</td>).*)</a>", r'[\2](\1)', string)
+def strip_tags(html, to_md=True):
+	if to_md: repl = {'code': '`', 'td': '', 'strong': '**', 'sup': '', 'strike': '---', 'b': '**', 'i': '*'}
+	else: repl = {'code': '', 'td': '', 'strong': '', 'sup': '', 'strike': '', 'b': '', 'i': ''}
+	link = re.compile(r'<a href="([^"]+)"([^>]*)>([^<]+)</a>')
 
-def removeHTML(string, mode):
-        if mode == 1:
-                start = 10; end = -12
-        if mode == 2:
-                start = 4; end = -5
-        return HTMLtoMD(string[start:end])
+	if link.search(html):
+		url, _, disp = link.search(html).groups()
+		hurl, hdisp = map(HTML.unescape, [url, disp])
+		html = html.replace('<a href="{}"{}>{}</a>'.format(url, _, disp), '[{}]({})'.format(hdisp, hurl))
 
-def from_md(string, p=False):
-        string = re.sub(r'</?code>', '', string)
-        tokens = r'([^&]*)(&#[1234567890abcdef]+;)([^&]*)'
-        try: matches = list(re.match(tokens, string).groups())
-        except: return string
-        for i, elem in enumerate(matches):
-                if re.search('^&#[1234567890abcdef]+;$', elem):
-                        matches[i] = chr(int(elem[2:-1]))
-        return ''.join(matches)
+	for old, new in repl.items():
+		html = re.sub(r'</?{}>'.format(old), new, html)
+
+	return HTML.unescape(html)
 
 def initDescriptions(url, page):
-        if page in ['Quicks', 'Syntax']: REGEX = QUICK
-        else: REGEX = ATOM
+        if page in ['Quicks', 'Syntax']: REGEX = QUICK; example = ' Example: '
+        else: REGEX = ATOM; example = ' '
         
         f = str(requests.get(url).text).strip()
         start = f.find('<tbody>')
@@ -77,26 +66,29 @@ def initDescriptions(url, page):
         
         for match in matches:
                 if len(match) == 5:
-                        match = match[0], match[1], match[2]+' '+match[3], match[4]
-                _, atom, des, _ = match
-                LOOKUP[removeHTML(atom, 1)] = removeHTML(des, 2)
+                        match = match[0], match[1], match[2] + example + match[3], match[4]
+                _, atom, des, _ = map(strip_tags, match)
+                LOOKUP[atom] = des
         
 for page in ['Atoms', 'Quicks', 'Syntax']:
         initDescriptions(URL + page, page)
 
 def handleEvents(room, event):
-        if event['user_id']==chatbot.bot_chat_id: return # don't consider events from the bot*
-        if event['event_type']==1: # event: new message
+        if 'user_id' not in event.keys():
+                return
+        if event['user_id'] == chatbot.bot_chat_id:
+                return
+        if event['event_type'] == 1: # event: new message
                 handleMessage(room, event)
-        if event['event_type']==3: # event: user entered the room
+        if event['event_type'] == 3: # event: user entered the room
                 pass
-        if event['event_type']==6: # event: change in the stars on a message
+        if event['event_type'] == 6: # event: change in the stars on a message
                 pass
-        if event['event_type']==10: # event: message deleted
+        if event['event_type'] == 10: # event: message deleted
                 pass
         
 def retrieve_description(command):
-        command = HTMLtoMD(command, True)
+        command = strip_tags(command)
         try: return '`' + command + '`: ' + LOOKUP[command]
         except: return 'No such command: {}'.format(command)
 
@@ -127,7 +119,7 @@ def initCommands():
 
         def from_ascii(room, reply, user, event, *args):
                 for chars in args:
-                        chars = HTMLtoMD(chars, True)
+                        chars = strip_tags(chars)
                         try: room.sendMessage(':{} Converted `{}` to `{}`'.format(reply, chars, ascii_jelly.replacements[chars]))
                         except KeyError:
                                 if len(chars) == 1: room.sendMessage(':{} Converted `{}` to `{}`'.format(reply, chars, chars))
@@ -137,7 +129,7 @@ def initCommands():
                 find = ':{} Constructed the code: {}{}{}'
                 repl = ''
                 for chars in args:
-                        chars = HTMLtoMD(chars, True)
+                        chars = strip_tags(chars)
                         if len(chars) == 1 and ord(chars) in list(range(32, 128)):
                                 repl += chars
                         else:
@@ -154,16 +146,22 @@ def initCommands():
                 if INPUTS: local_ins = '\n'.join(INPUTS.copy())
                 else: local_ins = '' 
                 args = ' '.join(args)
-                code = from_md(code)
+                code = strip_tags(code)
                 if args[0] != '[' and args[-1] != ']':
                         args = '[' + args + ']'
                 try: args = eval(args)
                 except: pass
-                #try:
-                out, err = tio.sendreq(code, args, local_ins)
-                #except: return room.sendMessage(':{} No output produced, check TIO'.format(reply))
+                try:
+                        out, err = webstuff.sendtioreq(code, args, local_ins)
+                except: return room.sendMessage(':{} No output produced, check TIO'.format(reply))
                 exit_code = int(ERR_RESPONSE.findall(err.strip())[0])
-                room.sendMessage('    @{}\n    {}'.format(user, out))
+                if out:
+                        room.sendMessage('    @{}\n    {}'.format(user, out))
+                else:
+                        if err:
+                                err = err.split('\n\n')[0]
+                                room.sendMessage('    @{}\n    Error:\n    {}'.format(user, '\n    '.join(err.split('\n'))))
+                        else: room.sendMessage(':{} No output produced, check TIO'.format(reply))
 
         def add_input(room, reply, user, event, *args):
                 if not args: return
@@ -173,6 +171,40 @@ def initCommands():
         def clear_input(room, reply, user, event, *args):
                 INPUTS.clear()
                 room.sendMessage(':{} Cleared input'.format(reply))
+
+        def resources(room, reply, user, event, *args):
+                room.sendMessage(':{} [Resources](https://golfingsuccess.github.io/jelly-hypertraining/)'.format(reply))
+
+        def addtodo(room, reply, user, event, *args):
+                if user == 'cairdcoinheringaahing':
+                        with open(todolist, 'a') as file:
+                                file.write(' '.join(args) + '\n')
+                        msg = ':{} Added to the todo list'.format(reply)
+                else:
+                        msg = ':{} Who are you? Ping caird coinheringaahing if you want to do that'.format(reply)
+                room.sendMessage(msg)
+
+        def removetodo(room, reply, user, event, *args):
+                index = int(args[0])
+                if user == 'cairdcoinheringaahing':
+                        with open(todolist) as file:
+                                contents = file.readlines()
+                        contents.pop(index)
+                        with open(todolist, 'w') as file:
+                                file.write('\n'.join(contents))
+                        msg = ':{} Removed the {}th item'.format(reply, index)
+                else:
+                        msg = ':{} Who are you? Ping caird coinheringaahing if you want to do that'.format(reply)
+                room.sendMessage(msg)
+
+        def readtodo(room, reply, user, event, *args):
+                if user == 'cairdcoinheringaahing':
+                        with open(todolist) as file:
+                                contents = file.read()
+                        msg = ':{} Todo list\n{}'.format(reply, contents)
+                else:
+                        msg = ':{} Who are you? Ping caird coinheringaahing if you want to do that'.format(reply)
+                room.sendMessage(msg)
                 
         addCommand(describe, 'describe')
         addCommand(find, 'find')
@@ -184,6 +216,10 @@ def initCommands():
         addCommand(run_tio, 'run')
         addCommand(add_input, 'addinput')
         addCommand(clear_input, 'clearinput')
+        addCommand(resources, 'resources')
+        addCommand(addtodo, 'addtodo')
+        addCommand(removetodo, 'removetodo')
+        addCommand(readtodo, 'readtodo')
 
         return unknown
         
@@ -225,6 +261,7 @@ def help_msg(room, reply, user, event, *args):
         room.sendMessage(((':{} '.format(reply))*(about != 'all')) + msg.split('\n')[0])
         for message in msg.split('\n')[1:]:
                 room.sendMessage(message)
+                time.sleep(1)
         
 def handleMessage(room, event):
         content = event['content']
@@ -241,6 +278,11 @@ def handleMessage(room, event):
                 content = content[13:]
                 help_msg(room, msg_id, username, event, content)
                 return False
+
+        if content.startswith('@JHTBot help'):
+                content = 'all'
+                help_msg(room, msg_id, username, event, content)
+                return False
         
         for init in commands:
                 if content.find(init) == 0:
@@ -250,6 +292,8 @@ def handleMessage(room, event):
                                 if content_.lower().find(cmd_msg) == 0:
                                         found = True
                                         func, sep = commands[init][cmd_msg.lower()]
+                                        if cmd_msg == 'readtodo':
+                                                func(room, msg_id, username, event, None)
                                         content_ = content_[len(cmd_msg)+len(sep):]
                                         args = content_.split(sep)
                                         if args == ['']: args=[]
