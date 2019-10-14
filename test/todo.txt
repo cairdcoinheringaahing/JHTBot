@@ -1,0 +1,18 @@
+fix HTML parsing
+make help messages for the todo list commands
+remove ping from todo commands
+check user id instead of username for todo commands
+preferred: register edits at some point
+help for resources command
+fix random bug that keeps crashing it
+remove &#39;&amp;zwnj;&amp;#8203;&#39; from messages
+silently ignore unknown commands/add <code>ignore this: </code> command
+New command: sleep (only usable by me). Kills you
+Fix question searcher
+ignore commands that are in the arguments
+Allow for dynamic command creation by whitelisted users
+take empty input
+
+correct code page
+fix you
+
